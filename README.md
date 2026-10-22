@@ -70,20 +70,32 @@ python -m pytest tests
 `verify_pull.py` calls the live DataWeb API. It needs a DataWeb API token and the pipeline's
 `fetch_dataweb` module (authentication and request handling), which is not included here.
 
-## Known limitations
+## Scope: a tripwire, not the full classification
 
-These are deliberate scope limits of the screen, listed so its flags are read correctly:
+`screen_anomalies.py` is deliberately simple: a fast monthly check for upward moves that break
+from a partner's own history. Read its flags with that in mind:
 
-- **Upward moves only.** It flags spikes and arrivals, not collapses or exits. A partner falling
-  to zero is not flagged yet.
-- **"NEW ENTRANT" means newly material,** not necessarily first-ever trade: a partner returning
-  after a year's absence fires the same rule.
-- **One set of thresholds.** The volume floors suit crude in barrels; other commodity families
-  need their own floors, as the code comments note.
-- **Z-scores suit steady flows best.** For partners that ship one cargo every few months, a
-  normal shipment can look unusual.
-- **Truncated edges.** A file missing its latest month has no interior gap, so neither script
-  sees it. The as-of month has to be checked against the release calendar.
+- It flags spikes and arrivals, not collapses or exits.
+- "NEW ENTRANT" means newly material: a partner returning after a year's absence fires the same rule.
+- Its volume floors suit crude in barrels.
+- Z-scores suit steady flows; an irregular shipper's normal cargo can look unusual.
+
+In the full pipeline, a separate exception report (not included here) classifies every partner
+against the same month, year-to-date and quarter a year earlier, and covers each of these points:
+
+- **Exits and declines:** partners are typed as EXIT, RETREATING or driving the decline, not only as
+  increases.
+- **True entrants:** ENTRANT requires the partner to have been below 30% of the floor a year
+  earlier and above it now.
+- **Irregular flows:** partners present in fewer than 60% of the trailing 12 months are typed
+  EPISODIC instead of being judged by volatility.
+- **Commodity-specific floors:** each code's floor is the larger of a per-family minimum (crude,
+  LNG, coal, fertilizer and so on) and 0.5% of the code's total, scaled to the window length.
+- **Dominant partners** (above about 40% share) are separated out before the rest of the field is
+  judged.
+
+One limit applies to both: a file missing its **latest** month has no interior gap, so the as-of
+month has to be checked against the release calendar.
 
 ## Design choices
 
