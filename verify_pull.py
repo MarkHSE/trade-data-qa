@@ -37,7 +37,10 @@ from pathlib import Path
 
 import pandas as pd
 
-import fetch_dataweb as F  # reuse: headers_for, load_token, run_report, MEASURE_TOKENS, MONTH_NUM
+# fetch_dataweb (authentication and DataWeb requests) is part of the private
+# pipeline. It is imported in main(), after argument parsing, so --help works
+# without it; tests substitute a stub for F.
+F = None  # set in main(): headers_for, load_token, run_report, MEASURE_TOKENS, MONTH_NUM
 
 
 def build_aggregate_payload(flow: str, import_type: str, basis: str,
@@ -143,6 +146,14 @@ def main() -> None:
                     help="allowed %% difference before flagging a mismatch (default 0.1%%)")
     args = ap.parse_args()
 
+    global F
+    if F is None:
+        try:
+            import fetch_dataweb as F
+        except ModuleNotFoundError:
+            sys.exit("ERROR: verify_pull.py needs the pipeline's fetch_dataweb module "
+                     "and a DataWeb API token (not included in this repository).")
+
     if not args.file:
         args.file = input("Parquet file to verify: ").strip()
     path = Path(args.file)
@@ -247,6 +258,8 @@ def main() -> None:
     else:
         print("[verify] *** MISMATCH DETECTED *** -- do not trust this file until resolved")
     print("=" * 109)
+    # Exit status is the contract for automation: non-zero means do not use the file.
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":

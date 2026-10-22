@@ -13,6 +13,7 @@ and wrong. These scripts catch them before anything is charted or published.
 |---|---|
 | `verify_pull.py` | Checks a downloaded dataset against the source itself. For each year it makes one cheap, fully aggregated DataWeb API call for value and quantity, compares the totals with the file's own totals for the same codes and months, and flags any difference above tolerance. |
 | `screen_anomalies.py` | Flags country × code × month observations that break from their own history. Two rules: a z-score against each partner's trailing 12 months, and a "new entrant" rule for flows that appear from a near-zero base. |
+| `tests/` | pytest suites: the planted flags, every refusal, and `verify_pull.py` against a stubbed DataWeb API (no token needed). |
 | `make_sample_data.py` | Written for this repository: builds a small synthetic panel with the same schema as the real pulls, so the anomaly screen can be run without DataWeb access. |
 
 ## Why each check exists
@@ -30,7 +31,7 @@ documented in the code:
   codes the file contains in each year.
 
 It also checks every year by default rather than recent years only, because files get reassembled
-and DataWeb revises history.
+and DataWeb revises history, and it exits non-zero on any mismatch so it can stop a pipeline.
 
 **`screen_anomalies.py`: a chart is not a check.**
 
@@ -46,7 +47,8 @@ and DataWeb revises history.
 
 **The screen also refuses input that would corrupt its own statistics:** duplicate rows (a
 month counted twice becomes a phantom spike) and months missing from either flow (a failed pull
-would otherwise read as zero trade). Its month calendar is generated rather than read from the
+would otherwise read as zero trade). Gaps are checked inside each flow's own date range, because
+imports and exports can legitimately end in different months. Its month calendar is generated rather than read from the
 data, so a trailing window of 12 months is always 12 calendar months.
 
 ## Run it
@@ -58,6 +60,12 @@ python screen_anomalies.py --imports data/imports.parquet --exports data/exports
 ```
 
 On the sample data the screen flags the planted Netherlands spike and Turkey as a new entrant.
+
+Run the tests:
+
+```bash
+python -m pytest tests
+```
 
 `verify_pull.py` calls the live DataWeb API. It needs a DataWeb API token and the pipeline's
 `fetch_dataweb` module (authentication and request handling), which is not included here.

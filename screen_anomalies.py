@@ -136,21 +136,24 @@ def preflight(con, code_col: str, unit_filter: bool):
         raise SystemExit(f"REFUSED: codes mix units and cannot be summed.{hint}\n"
                          f"{mixed.head().to_string(index=False)}")
 
+    # Interior gaps only, within each flow's own span: flows legitimately end
+    # in different months (release lag), and that is not a failed pull.
     gaps = con.sql("""
-        with span as (
-            select unnest(generate_series(min(date)::date, max(date)::date,
-                                          interval 1 month))::date as date
-            from panel),
-        flows as (select distinct flow from panel)
-        select f.flow, s.date
-        from flows f cross join span s
+        with spans as (
+            select flow, min(date)::date as lo, max(date)::date as hi
+            from panel group by flow),
+        expected as (
+            select flow, unnest(generate_series(lo, hi, interval 1 month))::date as date
+            from spans)
+        select e.flow, e.date
+        from expected e
         where not exists (select 1 from panel p
-                          where p.flow = f.flow and p.date = s.date)
+                          where p.flow = e.flow and p.date = e.date)
         order by 1, 2
     """).df()
     if len(gaps):
-        raise SystemExit(f"REFUSED: months missing from the input (failed pull?), "
-                         f"which would read as zero trade:\n{gaps.to_string(index=False)}")
+        raise SystemExit(f"REFUSED: {len(gaps)} month(s) missing inside a flow's own range (failed pull?), "
+                         f"which would read as zero trade:\n{gaps.head().to_string(index=False)}")
 
 
 def screen(con, since: str | None):
